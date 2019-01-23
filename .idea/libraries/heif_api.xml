@@ -1,0 +1,11 @@
+<component name="libraryTable">
+  <library name="heif-api">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/heif-api/heif-api.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$PROJECT_DIR$/lib/heif-api/heif-api-sources.zip!/" />
+    </SOURCES>
+  </library>
+</component>
