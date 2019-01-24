@@ -13,12 +13,12 @@ import com.drew.metadata.file.FileSystemDirectory;
 import com.drew.metadata.icc.IccDirectory;
 import com.drew.metadata.mov.QuickTimeDirectory;
 import com.nokia.heif.*;
-import com.nokia.heif.Exception;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.Exception;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -150,6 +150,16 @@ public class FileMetadata {
         return null;
     }
 
+    public static Instant getHEICDateTaken(File file) {
+        try {
+            Metadata metadata = readHEICMetadata(file);
+            return getDate(metadata, ExifIFD0Directory.class, ExifDirectoryBase.TAG_DATETIME);
+        } catch (Exception ex) {
+            LOG.error("getHEICDateTaken: {}", ex);
+        }
+        return null;
+    }
+
     /**
      * Find the data time from an HEIC file by examining the primary image
      * <p>
@@ -159,37 +169,37 @@ public class FileMetadata {
      * @param file
      * @return
      */
-    public static Instant getHEICDateTaken(File file) {
-        Instant date = null;
-        try {
-            HEIF heif = new HEIF();
-
-            heif.load(file.getAbsolutePath());
-            ImageItem primaryImage = heif.getPrimaryImage();
-
-            ExifItem ex = null;
-            for (MetaItem item : primaryImage.getMetadatas()) {
-                if (item instanceof ExifItem) {
-                    ex = (ExifItem) item;
-                    break;
-                }
-            }
-            if (ex != null) {
-                byte[] dt = ex.getDataAsArray();
-                Metadata metadata = new Metadata();
-                final int HEIF_EXIF_PREAMBLE_LEN = 4;
-                new ExifReader().extract(new ByteArrayReader(dt), metadata,
-                        HEIF_EXIF_PREAMBLE_LEN + ExifReader.JPEG_SEGMENT_PREAMBLE.length(),
-                        null);
-
-                date = getDate(metadata, ExifIFD0Directory.class, ExifDirectoryBase.TAG_DATETIME);
-            } else {
-                LOG.error("Unable to find exif");
-            }
-        } catch (Exception e) {
-            LOG.error("HEIF {}", e);
+    private static Metadata readHEICMetadata(File file)
+            throws Exception {
+        // Obtain the primary image within the HEIC image set
+        HEIF heif = new HEIF();
+        heif.load(file.getAbsolutePath());
+        ImageItem primaryImage = heif.getPrimaryImage();
+        if (primaryImage == null) {
+            throw new Exception("Unable to locate Primary Image");
         }
-        return date;
+
+        // Obtain the Exif metadata from the image
+        ExifItem exifItem = null;
+        for (MetaItem item : primaryImage.getMetadatas()) {
+            if (item instanceof ExifItem) {
+                exifItem = (ExifItem) item;
+                break;
+            }
+        }
+        if (exifItem == null) {
+            throw new Exception("Unable to locate ExifItem");
+        }
+
+        // Read the Exif byte array into the Metadata object using the ExifReader helper class
+        byte[] data = exifItem.getDataAsArray();
+        Metadata metadata = new Metadata();
+        final int HEIF_EXIF_PREAMBLE_LEN = 4; //TODO validate prefix
+        new ExifReader().extract(new ByteArrayReader(data), metadata,
+                HEIF_EXIF_PREAMBLE_LEN + ExifReader.JPEG_SEGMENT_PREAMBLE.length(),
+                null);
+
+        return metadata;
     }
 
     public static void dump(File file) {
