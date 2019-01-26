@@ -87,7 +87,7 @@ public class FileMetadata {
                 break;
 
             case ".HEIC":
-                dateTaken = getHEICDateTaken(file);
+                dateTaken = getHEIFDateTaken(file);
                 break;
 
             default:
@@ -144,12 +144,12 @@ public class FileMetadata {
         return null;
     }
 
-    private static Instant getHEICDateTaken(File file) {
+    private static Instant getHEIFDateTaken(File file) {
         try {
-            Metadata metadata = HEICMetadataReader.readMetadata(file);
+            Metadata metadata = HEIFMetadataReader.readMetadata(file);
             return getDate(metadata, ExifIFD0Directory.class, ExifDirectoryBase.TAG_DATETIME);
         } catch (ImageProcessingException ex) {
-            LOG.error("getHEICDateTaken: {}", ex);
+            LOG.error("getHEIFDateTaken: {}", ex);
         }
         return null;
     }

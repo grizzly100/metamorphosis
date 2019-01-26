@@ -14,11 +14,11 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 
 /**
- * Read metadata from HEIC images. Class uses Nokia HEIC API
+ * Read metadata from HEIF images. Class uses Nokia HEIF API
  */
-public class HEICMetadataReader {
+public class HEIFMetadataReader {
 
-    private static final Logger LOG = LoggerFactory.getLogger(HEICMetadataReader.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HEIFMetadataReader.class);
 
     /**
      * EXIF metadata preamble (See ExifReader.JPEG_SEGMENT_PREAMBLE) is prefixed by this
@@ -49,7 +49,7 @@ public class HEICMetadataReader {
     private static byte[] readExifMetadataAsBytes(String filename)
             throws ImageProcessingException {
         try {
-            // Obtain the primary image within the HEIC image set
+            // Obtain the primary image within the HEIF image set
             HEIF heif = new HEIF();
             heif.load(filename);
             ImageItem primaryImage = heif.getPrimaryImage();
