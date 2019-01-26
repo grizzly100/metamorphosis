@@ -41,6 +41,9 @@ public class FileInfo implements Comparable<FileInfo> {
     public void setSourceFile(File sourceFile) {
         this.sourceFile = sourceFile;
         this.dateTaken = FileMetadata.getDateTaken(sourceFile);
+        if (this.dateTaken == null) {
+            dateTaken = FileMetadata.getFileDate(sourceFile, FileMetadata.FILE_CREATION_TIME);
+        }
     }
 
     public String getSourceFileName() {

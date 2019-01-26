@@ -40,11 +40,11 @@ public class FileRenamer {
 
                 if (action) {
                     p.getSourceFile().renameTo(targetFile);
-                    updateDates(p);
                 } else {
                     // Emit proposals
                     LOG.info("move \"{}\" \"{}\"", p.getSourceFileName(), targetFile.getName());
                 }
+                updateDates(p);
             }
 
         } catch (IOException ex) {

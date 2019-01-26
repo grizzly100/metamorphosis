@@ -9,6 +9,7 @@ import com.drew.metadata.exif.ExifDirectoryBase;
 import com.drew.metadata.exif.ExifIFD0Directory;
 import com.drew.metadata.icc.IccDirectory;
 import com.drew.metadata.mov.QuickTimeDirectory;
+import com.drew.metadata.mov.metadata.QuickTimeMetadataDirectory;
 import org.grizzlytech.metamorphosis.imaging.heif.HEIFMetadataReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,33 +74,34 @@ public class FileMetadata {
         Instant dateTaken = null;
         String ext = FileMetadata.getExtension(file).toUpperCase();
 
-        switch (ext) {
-            case ".JPG":
-            case ".JPEG":
-                dateTaken = getJPGDateTaken(file);
-                break;
+        try {
+            switch (ext) {
+                case ".JPG":
+                case ".JPEG":
+                    dateTaken = getJPGDateTaken(file);
+                    break;
 
-            case ".PNG":
-                dateTaken = getPNGDateTaken(file);
-                break;
+                case ".PNG":
+                    dateTaken = getPNGDateTaken(file);
+                    break;
 
-            case ".MOV":
-                dateTaken = getQTDateTaken(file);
-                break;
+                case ".MOV":
+                    dateTaken = getQTDateTaken(file);
+                    break;
 
-            case ".HEIC":
-                dateTaken = getHEIFDateTaken(file);
-                break;
+                case ".HEIC":
+                    dateTaken = getHEIFDateTaken(file);
+                    break;
 
-            default:
-                LOG.error("Cannot map for {}", ext);
-        }
+                default:
+                    LOG.error("Unsupported file extension {}", ext);
+            }
 
-        if (dateTaken == null) {
-            // Dump all the metadata in the case of extraction failure
-            LOG.error("Exif extraction failed for {}", file.getAbsolutePath());
-            FileMetadata.dump(file);
-            dateTaken = getFileDate(file, FILE_CREATION_TIME);
+            if (dateTaken == null) {
+                LOG.error("(non-exception) problem parsing metadata in {}", file.getAbsolutePath());
+            }
+        } catch (Exception ex) {
+            LOG.error("Exception parsing metadata in {}", file.getAbsolutePath(), ex);
         }
 
         return dateTaken;
@@ -126,9 +128,14 @@ public class FileMetadata {
     }
 
     private static Instant getQTDateTaken(File file) {
+        /**
+         * For some reason Drew has not added a public TAG for this attribute in QuickTimeMetadataDirectory
+         * See _tagIntegerMap.put("com.apple.quicktime.creationdate", 0x0506);
+         */
+        final int TAG_QUICKTIME_CREATIONDATE = 0x0506; // 1286
         try {
             Metadata metadata = ImageMetadataReader.readMetadata(file);
-            return getDate(metadata, QuickTimeDirectory.class, QuickTimeDirectory.TAG_CREATION_TIME);
+            return getDate(metadata, QuickTimeMetadataDirectory.class, TAG_QUICKTIME_CREATIONDATE);
         } catch (IOException | ImageProcessingException ex) {
             LOG.error("getQTDateTaken: {}", ex);
         }
@@ -160,8 +167,8 @@ public class FileMetadata {
         try {
             Metadata metadata = ImageMetadataReader.readMetadata(file);
             dump(metadata);
-        } catch (IOException | ImageProcessingException ex) {
-            LOG.error("Ouch: ", ex);
+        } catch (Exception ex) {
+            LOG.error("Failed to dump {}", file.getAbsolutePath(), ex);
         }
     }
 
