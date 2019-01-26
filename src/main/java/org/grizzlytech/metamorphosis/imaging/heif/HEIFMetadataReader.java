@@ -30,7 +30,7 @@ public class HEIFMetadataReader {
 
     /**
      * Locating the primary image and extracting the EXIF byte array is not directly supported by Drew Noakes library.
-     * We use the Nokia HEIF reference implementation to perform this task
+     * We use the Nokia HEIF reference implementation to perform this task, then hand back parsing to Drew.
      *
      * @param file
      * @return
@@ -50,9 +50,10 @@ public class HEIFMetadataReader {
 
     private static byte[] readExifMetadataAsBytes(String filename)
             throws ImageProcessingException {
+        HEIF heif = null;
         try {
             // Obtain the primary image within the HEIF image set
-            HEIF heif = new HEIF();
+            heif = new HEIF();
             heif.load(filename);
             ImageItem primaryImage = heif.getPrimaryImage();
             if (primaryImage == null) {
@@ -76,6 +77,8 @@ public class HEIFMetadataReader {
 
         } catch (com.nokia.heif.Exception ex) {
             throw new ImageProcessingException(ex.getMessage(), ex);
+        } finally {
+            heif.release(); // free resources
         }
     }
 }
