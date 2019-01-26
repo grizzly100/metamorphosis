@@ -9,6 +9,7 @@ import com.drew.metadata.exif.ExifDirectoryBase;
 import com.drew.metadata.exif.ExifIFD0Directory;
 import com.drew.metadata.icc.IccDirectory;
 import com.drew.metadata.mov.QuickTimeDirectory;
+import org.grizzlytech.metamorphosis.imaging.heif.HEIFMetadataReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

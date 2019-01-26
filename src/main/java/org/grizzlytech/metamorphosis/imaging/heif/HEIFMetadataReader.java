@@ -1,7 +1,8 @@
-package org.grizzlytech.metamorphosis;
+package org.grizzlytech.metamorphosis.imaging.heif;
 
 import com.drew.imaging.ImageProcessingException;
 import com.drew.lang.ByteArrayReader;
+import com.drew.lang.annotations.NotNull;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.exif.ExifReader;
 import com.nokia.heif.ExifItem;
@@ -34,7 +35,8 @@ public class HEIFMetadataReader {
      * @param file
      * @return
      */
-    public static Metadata readMetadata(File file)
+    @NotNull
+    public static Metadata readMetadata(@NotNull File file)
             throws ImageProcessingException {
         // Read metadata into byte array
         byte[] data = readExifMetadataAsBytes(file.getAbsolutePath());
