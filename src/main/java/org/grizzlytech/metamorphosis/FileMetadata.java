@@ -2,26 +2,20 @@ package org.grizzlytech.metamorphosis;
 
 import com.drew.imaging.ImageMetadataReader;
 import com.drew.imaging.ImageProcessingException;
-import com.drew.lang.ByteArrayReader;
 import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.Tag;
 import com.drew.metadata.exif.ExifDirectoryBase;
 import com.drew.metadata.exif.ExifIFD0Directory;
-import com.drew.metadata.exif.ExifReader;
-import com.drew.metadata.file.FileSystemDirectory;
 import com.drew.metadata.icc.IccDirectory;
 import com.drew.metadata.mov.QuickTimeDirectory;
-import com.nokia.heif.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.Exception;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.time.*;
 import java.util.Arrays;
@@ -111,7 +105,7 @@ public class FileMetadata {
     }
 
 
-    public static Instant getDate(Metadata metadata, Class<? extends Directory> directoryType, int tag) {
+    private static Instant getDate(Metadata metadata, Class<? extends Directory> directoryType, int tag) {
         Date dt = null;
         for (Directory directory : metadata.getDirectoriesOfType(directoryType)) {
             dt = directory.getDate(tag);
@@ -120,7 +114,7 @@ public class FileMetadata {
         return (dt != null) ? dt.toInstant() : null;
     }
 
-    public static Instant getJPGDateTaken(File file) {
+    private static Instant getJPGDateTaken(File file) {
         try {
             Metadata metadata = ImageMetadataReader.readMetadata(file);
             return getDate(metadata, ExifIFD0Directory.class, ExifDirectoryBase.TAG_DATETIME);
@@ -130,7 +124,7 @@ public class FileMetadata {
         return null;
     }
 
-    public static Instant getQTDateTaken(File file) {
+    private static Instant getQTDateTaken(File file) {
         try {
             Metadata metadata = ImageMetadataReader.readMetadata(file);
             return getDate(metadata, QuickTimeDirectory.class, QuickTimeDirectory.TAG_CREATION_TIME);
@@ -140,7 +134,7 @@ public class FileMetadata {
         return null;
     }
 
-    public static Instant getPNGDateTaken(File file) {
+    private static Instant getPNGDateTaken(File file) {
         try {
             Metadata metadata = ImageMetadataReader.readMetadata(file);
             return getDate(metadata, IccDirectory.class, IccDirectory.TAG_PROFILE_DATETIME);
@@ -150,56 +144,14 @@ public class FileMetadata {
         return null;
     }
 
-    public static Instant getHEICDateTaken(File file) {
+    private static Instant getHEICDateTaken(File file) {
         try {
-            Metadata metadata = readHEICMetadata(file);
+            Metadata metadata = HEICMetadataReader.readMetadata(file);
             return getDate(metadata, ExifIFD0Directory.class, ExifDirectoryBase.TAG_DATETIME);
-        } catch (Exception ex) {
+        } catch (ImageProcessingException ex) {
             LOG.error("getHEICDateTaken: {}", ex);
         }
         return null;
-    }
-
-    /**
-     * Find the data time from an HEIC file by examining the primary image
-     * <p>
-     * Locating the primary image and extracting the EXIF byte array is not directly supported by Drew Noakes library.
-     * We use the Nokia HEIF reference implementation to perform this task
-     *
-     * @param file
-     * @return
-     */
-    private static Metadata readHEICMetadata(File file)
-            throws Exception {
-        // Obtain the primary image within the HEIC image set
-        HEIF heif = new HEIF();
-        heif.load(file.getAbsolutePath());
-        ImageItem primaryImage = heif.getPrimaryImage();
-        if (primaryImage == null) {
-            throw new Exception("Unable to locate Primary Image");
-        }
-
-        // Obtain the Exif metadata from the image
-        ExifItem exifItem = null;
-        for (MetaItem item : primaryImage.getMetadatas()) {
-            if (item instanceof ExifItem) {
-                exifItem = (ExifItem) item;
-                break;
-            }
-        }
-        if (exifItem == null) {
-            throw new Exception("Unable to locate ExifItem");
-        }
-
-        // Read the Exif byte array into the Metadata object using the ExifReader helper class
-        byte[] data = exifItem.getDataAsArray();
-        Metadata metadata = new Metadata();
-        final int HEIF_EXIF_PREAMBLE_LEN = 4; //TODO validate prefix
-        new ExifReader().extract(new ByteArrayReader(data), metadata,
-                HEIF_EXIF_PREAMBLE_LEN + ExifReader.JPEG_SEGMENT_PREAMBLE.length(),
-                null);
-
-        return metadata;
     }
 
     public static void dump(File file) {
