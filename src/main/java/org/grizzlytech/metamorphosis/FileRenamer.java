@@ -19,17 +19,19 @@ public class FileRenamer {
 
     public static void main(String[] args) {
         String dir = args[0];
-        rename(dir, false);
+        rename(dir, true);
     }
 
     public static void rename(String dir, boolean action) {
 
         try (Stream<Path> paths = Files.walk(Paths.get(dir))) {
             // Sort supported media by date taken
+            LOG.info("Step1. Scanning [{}]", dir);
             FileInfo[] sorted = paths.filter(Files::isRegularFile).map(Path::toFile).filter(FileMetadata.IS_SUPPORTED).
                     map(FileInfo::new).sorted().toArray(FileInfo[]::new);
 
             // Set the positional value, starting at 1000
+            LOG.info("Step2. Processing [fileCount={}]", sorted.length);
             for (int position = 0; position < sorted.length; position++) {
                 FileInfo p = sorted[position];
                 p.setPosition(position + 1000);
@@ -39,12 +41,18 @@ public class FileRenamer {
                 File targetFile = new File(p.getSourceFile().getParent(), targetFileName);
 
                 if (action) {
+                    // Set the creation and modification dates then rename the file
+                    updateDates(p);
                     p.getSourceFile().renameTo(targetFile);
+                    // Checkpoint log
+                    if (position % 1000 == 0) {
+                        LOG.info(" Checkpoint [{}]", targetFile.getName());
+                    }
+
                 } else {
                     // Emit proposals
                     LOG.info("move \"{}\" \"{}\"", p.getSourceFileName(), targetFile.getName());
                 }
-                updateDates(p);
             }
 
         } catch (IOException ex) {
