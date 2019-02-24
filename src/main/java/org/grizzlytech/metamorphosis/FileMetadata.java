@@ -7,6 +7,7 @@ import com.drew.metadata.Metadata;
 import com.drew.metadata.Tag;
 import com.drew.metadata.exif.ExifDirectoryBase;
 import com.drew.metadata.exif.ExifIFD0Directory;
+import com.drew.metadata.exif.ExifSubIFDDirectory;
 import com.drew.metadata.icc.IccDirectory;
 import com.drew.metadata.mov.QuickTimeDirectory;
 import com.drew.metadata.mov.metadata.QuickTimeMetadataDirectory;
@@ -71,6 +72,15 @@ public class FileMetadata {
     }
 
 
+    public static Instant getDateTakenElseDefault(File file) {
+        Instant dateTaken = getDateTaken(file);
+        if (dateTaken == null) {
+            dateTaken = earliest(getFileDate(file, FILE_CREATION_TIME), getFileDate(file, FILE_LAST_MODIFIED_TIME));
+            LOG.info("FALLING BACK TO EARLIEST FILE TIME [{}]", dateTaken);
+        }
+        return dateTaken;
+    }
+
     public static Instant getDateTaken(File file) {
         Instant dateTaken = null;
         String ext = FileMetadata.getExtension(file).toUpperCase();
@@ -125,7 +135,13 @@ public class FileMetadata {
     private static Instant getJPGDateTaken(File file) {
         try {
             Metadata metadata = ImageMetadataReader.readMetadata(file);
-            return getDate(metadata, ExifIFD0Directory.class, ExifDirectoryBase.TAG_DATETIME);
+
+            // DateTime is always specified (this appears to be in the "wall time" when movie taken)
+            Instant creationDate = getDate(metadata, ExifIFD0Directory.class, ExifDirectoryBase.TAG_DATETIME);
+            // Optionally there is sometimes an original date
+            Instant originalDate = getDate(metadata, ExifSubIFDDirectory.class, ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL);
+            // Select the earliest
+            return earliestCreationDate(creationDate, originalDate, file);
         } catch (IOException | ImageProcessingException ex) {
             LOG.error("getJPGDateTaken: {}", ex);
         }
@@ -145,20 +161,8 @@ public class FileMetadata {
             Instant creationTime = getDate(metadata, QuickTimeDirectory.class, QuickTimeDirectory.TAG_CREATION_TIME);
             // Optionally there is sometimes a creation date (Apple requires this to be UTC)
             Instant creationDate = getDate(metadata, QuickTimeMetadataDirectory.class, TAG_QUICKTIME_CREATIONDATE);
-            // If both are provided but are different we need to handle the conflict
-            if (creationDate != null && !creationDate.equals(creationTime)) {
-                // Times may be an hour apart (due to DST issues) or within a few seconds, so check for this
-                // withinAnHour = 0 (approx one hour), -1 (less than one hour), +1 (over one hour)
-                int withinAnHour = compareTimeDeltaToPeriod(creationTime, creationDate, 3600, 100);
-                LOG.info("[{}]: TAG_CREATION_TIME [{}] != TAG_QUICKTIME_CREATIONDATE [{}] withinAnHour [{}]",
-                        file.getName(), creationTime, creationDate, withinAnHour);
-                // Only pick the earlier time if it makes a material difference
-                if (creationDate.isBefore(creationTime) && withinAnHour == 1) {
-                    creationTime = creationDate;
-                }
-                LOG.info("Selected [{}]", creationTime);
-            }
-            return creationTime;
+            // Select the earliest
+            return earliestCreationDate(creationTime, creationDate, file);
         } catch (IOException | ImageProcessingException ex) {
             LOG.error("getQTDateTaken: {}", ex);
         }
@@ -213,6 +217,36 @@ public class FileMetadata {
             cmp = -1;
         }
         return cmp;
+    }
+
+    private static Instant earliest(Instant time1, Instant time2) {
+        if (time2 == null) {
+            return time1;
+        }
+        return ((time1 != null) && time1.isBefore(time2)) ? time1 : time2;
+    }
+
+    /**
+     * @param mediaDate   date the media file was created (eg, ExifDirectoryBase.TAG_DATETIME)
+     * @param contentDate date the content in the media file was created (eg, ExifDirectoryBase.TAG_DATETIME_ORIGINAL)
+     * @return earliest date
+     */
+    private static Instant earliestCreationDate(Instant mediaDate, Instant contentDate, File file) {
+        Instant earliestDate = mediaDate;
+        // If both dates are provided but are materially different (>1hr) we need to handle the conflict
+        if (contentDate != null && !contentDate.equals(mediaDate)) {
+            // Times may be an hour apart (due to DST issues) or within a few seconds, so check for this
+            // withinAnHour = 0 (approx one hour), -1 (less than one hour), +1 (over one hour)
+            int withinAnHour = compareTimeDeltaToPeriod(mediaDate, contentDate, 3600, 100);
+            LOG.info("[{}]: mediaDate [{}] != contentDate [{}] withinAnHour [{}]",
+                    file.getName(), mediaDate, contentDate, withinAnHour);
+            // Only pick the earlier time if it makes a material difference
+            if (contentDate.isBefore(mediaDate) && withinAnHour == 1) {
+                earliestDate = contentDate;
+            }
+            LOG.info("[{}] Selected [{}]", file.getName(), earliestDate);
+        }
+        return earliestDate;
     }
 
     public static void dump(File file) {

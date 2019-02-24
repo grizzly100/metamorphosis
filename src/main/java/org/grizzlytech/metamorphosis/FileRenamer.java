@@ -40,6 +40,7 @@ public class FileRenamer {
                 String targetFileName = p.getRelativeName("IMG", true);
                 File targetFile = new File(p.getSourceFile().getParent(), targetFileName);
 
+                //FileMetadata.dump(p.getSourceFile());
                 if (action) {
                     // Set the creation and modification dates then rename the file
                     updateDates(p);
