@@ -10,6 +10,7 @@ import com.drew.metadata.exif.ExifIFD0Directory;
 import com.drew.metadata.icc.IccDirectory;
 import com.drew.metadata.mov.QuickTimeDirectory;
 import com.drew.metadata.mov.metadata.QuickTimeMetadataDirectory;
+import com.drew.metadata.mp4.Mp4Directory;
 import org.grizzlytech.metamorphosis.imaging.heif.HEIFMetadataReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,6 +90,10 @@ public class FileMetadata {
                     dateTaken = getQTDateTaken(file);
                     break;
 
+                case ".MP4":
+                    dateTaken = getMP4DateTaken(file);
+                    break;
+
                 case ".HEIC":
                     dateTaken = getHEIFDateTaken(file);
                     break;
@@ -135,9 +140,37 @@ public class FileMetadata {
         final int TAG_QUICKTIME_CREATIONDATE = 0x0506; // 1286
         try {
             Metadata metadata = ImageMetadataReader.readMetadata(file);
-            return getDate(metadata, QuickTimeMetadataDirectory.class, TAG_QUICKTIME_CREATIONDATE);
+
+            // Creation time is always specified (this appears to be in the "wall time" when movie taken)
+            Instant creationTime = getDate(metadata, QuickTimeDirectory.class, QuickTimeDirectory.TAG_CREATION_TIME);
+            // Optionally there is sometimes a creation date (Apple requires this to be UTC)
+            Instant creationDate = getDate(metadata, QuickTimeMetadataDirectory.class, TAG_QUICKTIME_CREATIONDATE);
+            // If both are provided but are different we need to handle the conflict
+            if (creationDate != null && !creationDate.equals(creationTime)) {
+                // Times may be an hour apart (due to DST issues) or within a few seconds, so check for this
+                // withinAnHour = 0 (approx one hour), -1 (less than one hour), +1 (over one hour)
+                int withinAnHour = compareTimeDeltaToPeriod(creationTime, creationDate, 3600, 100);
+                LOG.info("[{}]: TAG_CREATION_TIME [{}] != TAG_QUICKTIME_CREATIONDATE [{}] withinAnHour [{}]",
+                        file.getName(), creationTime, creationDate, withinAnHour);
+                // Only pick the earlier time if it makes a material difference
+                if (creationDate.isBefore(creationTime) && withinAnHour == 1) {
+                    creationTime = creationDate;
+                }
+                LOG.info("Selected [{}]", creationTime);
+            }
+            return creationTime;
         } catch (IOException | ImageProcessingException ex) {
             LOG.error("getQTDateTaken: {}", ex);
+        }
+        return null;
+    }
+
+    private static Instant getMP4DateTaken(File file) {
+        try {
+            Metadata metadata = ImageMetadataReader.readMetadata(file);
+            return getDate(metadata, Mp4Directory.class, Mp4Directory.TAG_CREATION_TIME);
+        } catch (IOException | ImageProcessingException ex) {
+            LOG.error("getMP4DateTaken: {}", ex);
         }
         return null;
     }
@@ -160,6 +193,26 @@ public class FileMetadata {
             LOG.error("getHEIFDateTaken: {}", ex);
         }
         return null;
+    }
+
+    /**
+     * Compare the difference between two Instants
+     *
+     * @param time1  first time to compare
+     * @param time2  second time to compare
+     * @param period time period in seconds
+     * @param error  error margin in seconds
+     * @return 0 if equal to the period (+/- error); 1 if greater time period (+error); -1 if less time period (-error)
+     */
+    private static int compareTimeDeltaToPeriod(Instant time1, Instant time2, long period, long error) {
+        int cmp = 0; // assume time difference is equal to the time period (+/- the error margin)
+        long delta = Math.abs(time1.getEpochSecond() - time2.getEpochSecond());
+        if (delta > period + error) {
+            cmp = 1;
+        } else if (delta < period - error) {
+            cmp = -1;
+        }
+        return cmp;
     }
 
     public static void dump(File file) {
