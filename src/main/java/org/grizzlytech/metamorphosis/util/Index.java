@@ -38,6 +38,13 @@ public class Index<K, V> extends HashMap<K, List<V>> {
         }
     }
 
+    public List<V> getUnique() {
+        // Filter out any sub-lists that have collisions
+        // Use flatMap to remove the grouping structure
+        return values().stream().filter(v -> v.size() == 1).flatMap(Collection::stream)
+                .collect(Collectors.toCollection(getListFactory()));
+    }
+
     /**
      * @return all values that collided (i.e, two of more values had the same key)
      */

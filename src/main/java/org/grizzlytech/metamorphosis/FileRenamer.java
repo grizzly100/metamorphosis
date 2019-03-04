@@ -21,71 +21,33 @@ public class FileRenamer {
 
     public static void main(String[] args) {
         String dir = args[0];
-        rename(dir, false);
+        boolean action = true;
+        String prefix = "IMG";
+
+        // Scan files, sorting into increasing date taken order
+        FileInfo[] files = scan(dir, true);
+
+        // Identify duplicates
+        List<List<FileInfo>> duplicates = findDuplicates(files);
+
+        // If there are duplicates, print them, otherwise rename the files
+        if (duplicates.size() > 0) {
+            printDuplicates("DUP:", duplicates);
+        } else {
+            rename(files, action, prefix);
+        }
     }
 
-    public static void rename(String dir, boolean action) {
-
-        // Sort supported media by date taken
-        LOG.info("Step1. Scanning [{}]", dir);
-        FileInfo[] sorted = scan(dir, true);
-
-        // Keep an index of all media with the same date taken and file size
-        // This will aid duplicate detection later
-        Index<String, FileInfo> dateAndSizeIndex = new Index<>();
-
-        // Set the positional value, starting at 1000
-        LOG.info("Step2. Processing [fileCount={}]", sorted.length);
-        for (int position = 0; position < sorted.length; position++) {
-            FileInfo p = sorted[position];
-            p.setPosition(position + 1000);
-
-            String key = p.getDateTaken() + "_" + p.getFileLength();
-            dateAndSizeIndex.insert(key, p);
-
-            // Determine the implied filename post the re-sort
-            String targetFileName = p.getRelativeName("IMG", true);
-            File targetFile = new File(p.getSourceFile().getParent(), targetFileName);
-
-            if (action) {
-                // Set the creation and modification dates then rename the file
-                updateDates(p);
-                p.getSourceFile().renameTo(targetFile);
-                // Checkpoint log
-                if (position % 1000 == 0) {
-                    LOG.info(" Checkpoint [{}]", targetFile.getName());
-                }
-
-            } else {
-                // Emit proposals
-                LOG.info("move \"{}\" \"{}\"", p.getSourceFileName(), targetFile.getName());
-            }
-        }
-
-        // Duplicate checking
-        List<FileInfo> dateAndSizeCollisions = dateAndSizeIndex.getCollisions();
-        LOG.info("Step3. Duplicate checking [candidates={}]", dateAndSizeCollisions.size());
-
-        // Re-index the possible duplicates using the md5 hash, which looks at the actual file content
-        // MD5 is a more expensive operation, hence only performed on the candidate duplicates
-        Index<String, FileInfo> md5Index = new Index<>();
-        dateAndSizeCollisions.forEach(p -> md5Index.insert(p.getMD5Checksum(), p));
-
-        // Now print the final list of duplicates
-        List<List<FileInfo>> duplicates = md5Index.getGroupedCollisions();
-        int groupId = 0;
-        int counter = 0;
-        for (List<FileInfo> group : duplicates) {
-            String groupName = String.format("%04d", ++groupId);
-            for (FileInfo d : group) {
-                LOG.info("DUP: {} {} {}", groupName, d.getMD5Checksum(), d.getSourceFile().getAbsolutePath());
-                ++counter;
-            }
-        }
-        LOG.info("Done. Duplicate checking completed [duplicates={}]", counter);
-    }
-
+    /**
+     * Scan a directory for supported media files.
+     * Scanning involves extracting the date taken and file size
+     *
+     * @param dir  directory to scan
+     * @param sort whether to sort the results by date taken before returning
+     * @return array of FileInfo objects
+     */
     public static FileInfo[] scan(String dir, boolean sort) {
+        LOG.info("Scanning [{}]", dir);
         FileInfo[] results = null;
         try (Stream<Path> paths = Files.walk(Paths.get(dir))) {
             // Sort supported media by date taken
@@ -97,12 +59,90 @@ public class FileRenamer {
             if (sort) {
                 stream = stream.sorted();
             }
-
             results = stream.toArray(FileInfo[]::new);
         } catch (IOException ex) {
-            LOG.error("Err", ex);
+            LOG.error("Scanning error", ex);
         }
         return results;
+    }
+
+    /**
+     * Find all duplicates in the directory. Duplicates are required to have the same MD5 checksum.
+     * <p>
+     * Strategy is to quickly find all media files with the same date taken and file size, then
+     * to compare the MD5 checksum for the candidate duplicates
+     *
+     * @param files media files to examine
+     */
+    public static List<List<FileInfo>> findDuplicates(FileInfo[] files) {
+        // Index of all media with the same date taken and file size
+        Index<String, FileInfo> dateAndSizeIndex = new Index<>();
+
+        LOG.info("Indexing [fileCount={}]", files.length);
+        for (FileInfo info : files) {
+            String key = info.getDateTaken() + "_" + info.getFileLength();
+            dateAndSizeIndex.insert(key, info);
+        }
+
+        // Duplicate checking
+        List<FileInfo> dateAndSizeCollisions = dateAndSizeIndex.getCollisions();
+        LOG.info("Duplicate checking [candidates={}]", dateAndSizeCollisions.size());
+
+        // Re-index the possible duplicates using the md5 hash, which looks at the actual file content
+        // MD5 is a more expensive operation, hence only performed on the candidate duplicates
+        Index<String, FileInfo> md5Index = new Index<>();
+        dateAndSizeCollisions.forEach(p -> md5Index.insert(p.getMD5Checksum(), p));
+
+        // TODO: More work needed on md5 checksum mis-matches as we are missing some edge case duplicates
+        print("FALSE:", md5Index.getUnique());
+
+        return md5Index.getGroupedCollisions();
+    }
+
+    public static void printDuplicates(String prefix, List<List<FileInfo>> duplicates) {
+        int groupId = 0;
+        int counter = 0;
+        for (List<FileInfo> group : duplicates) {
+            String groupName = String.format("%04d", ++groupId);
+            for (FileInfo d : group) {
+                LOG.info("{} {} {} {}", prefix, groupName, d.getMD5Checksum(), d.getSourceFile().getAbsolutePath());
+                ++counter;
+            }
+        }
+    }
+
+    public static void print(String prefix, List<FileInfo> files) {
+        for (FileInfo info : files) {
+            LOG.info("{} {} {} {}", prefix, info.getMD5Checksum(), info.getFileLength(), info.getSourceFile().getAbsolutePath());
+        }
+    }
+
+    public static void rename(FileInfo[] files, boolean action, String prefix) {
+        // Set the positional value, starting at 1000
+        LOG.info("Renaming [fileCount={}]", files.length);
+        for (int position = 0; position < files.length; position++) {
+            FileInfo info = files[position];
+            info.setPosition(position + 1000);
+
+            // Determine the implied filename post the re-sort
+            String targetFileName = info.getRelativeName(prefix, true);
+            File targetFile = new File(info.getSourceFile().getParent(), targetFileName);
+
+            if (action) {
+                // Set the creation and modification dates then rename the file
+                updateDates(info);
+                info.getSourceFile().renameTo(targetFile);
+                // Checkpoint log
+                if (position % 1000 == 0) {
+                    LOG.info(" Checkpoint [{}]", targetFile.getName());
+                }
+
+            } else {
+                // Emit proposals
+                LOG.info("move \"{}\" \"{}\"", info.getSourceFileName(), targetFile.getName());
+            }
+        }
+        LOG.info("Done");
     }
 
     protected static void updateDates(FileInfo p) {
