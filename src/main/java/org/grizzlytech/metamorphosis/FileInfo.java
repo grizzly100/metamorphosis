@@ -1,5 +1,6 @@
 package org.grizzlytech.metamorphosis;
 
+import org.grizzlytech.metamorphosis.util.MD5Checksum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,6 +24,10 @@ public class FileInfo implements Comparable<FileInfo> {
      */
     private Instant dateTaken;
 
+    private long fileLength = -1;
+
+    private String md5Checksum = null;
+
     /**
      * Relative position of the file (post sorting)
      */
@@ -41,6 +46,7 @@ public class FileInfo implements Comparable<FileInfo> {
     public void setSourceFile(File sourceFile) {
         this.sourceFile = sourceFile;
         this.dateTaken = FileMetadata.getDateTakenElseDefault(sourceFile);
+        this.fileLength = this.sourceFile.length();
     }
 
     public String getSourceFileName() {
@@ -49,6 +55,17 @@ public class FileInfo implements Comparable<FileInfo> {
 
     public Instant getDateTaken() {
         return this.dateTaken;
+    }
+
+    public long getFileLength() {
+        return this.fileLength;
+    }
+
+    public String getMD5Checksum() {
+        if ((this.md5Checksum == null) && (getFileLength() > 0)) {
+            this.md5Checksum = MD5Checksum.getMD5Checksum(getSourceFile());
+        }
+        return md5Checksum;
     }
 
     public String getLocalDateAsText() {
