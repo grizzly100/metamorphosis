@@ -1,5 +1,8 @@
 package org.grizzlytech.metamorphosis.util;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -16,6 +19,8 @@ import java.util.stream.Collectors;
  * @param <V> the value type
  */
 public class Index<K, V> extends HashMap<K, List<V>> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Index.class);
 
     /**
      * Insert a new Key, Value pair into the Index.
@@ -38,11 +43,13 @@ public class Index<K, V> extends HashMap<K, List<V>> {
         }
     }
 
-    public List<V> getUnique() {
-        // Filter out any sub-lists that have collisions
-        // Use flatMap to remove the grouping structure
-        return values().stream().filter(v -> v.size() == 1).flatMap(Collection::stream)
-                .collect(Collectors.toCollection(getListFactory()));
+    public void retract(K k, V v) {
+        List<V> entries = get(k);
+        if ((entries != null) && entries.contains(v)) {
+            entries.remove(v);
+        } else {
+            LOG.error("cannot retract k [{}] and v [{}]", k, v);
+        }
     }
 
     /**

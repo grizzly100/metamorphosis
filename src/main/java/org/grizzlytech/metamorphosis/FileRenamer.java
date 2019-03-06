@@ -27,14 +27,16 @@ public class FileRenamer {
         // Scan files, sorting into increasing date taken order
         FileInfo[] files = scan(dir, true);
 
-        // Identify duplicates
-        List<List<FileInfo>> duplicates = findDuplicates(files);
+        // Identify duplicates ( [0]=actual and [1]=false positive )
+        List<List<FileInfo>>[] duplicates = findDuplicates(files);
 
         // If there are duplicates, print them, otherwise rename the files
-        if (duplicates.size() > 0) {
-            printDuplicates("DUP:", duplicates);
+        if (duplicates[0].size() > 0) {
+            printDuplicates("DUP:", false, duplicates[0]);
+            printDuplicates("FSE:", false, duplicates[1]);
         } else {
             rename(files, action, prefix);
+            printDuplicates("FSE:", action, duplicates[1]);
         }
     }
 
@@ -74,14 +76,13 @@ public class FileRenamer {
      *
      * @param files media files to examine
      */
-    public static List<List<FileInfo>> findDuplicates(FileInfo[] files) {
+    public static List<List<FileInfo>>[] findDuplicates(FileInfo[] files) {
         // Index of all media with the same date taken and file size
         Index<String, FileInfo> dateAndSizeIndex = new Index<>();
 
         LOG.info("Indexing [fileCount={}]", files.length);
         for (FileInfo info : files) {
-            String key = info.getDateTaken() + "_" + info.getFileLength();
-            dateAndSizeIndex.insert(key, info);
+            dateAndSizeIndex.insert(getDateAndSizeKey(info), info);
         }
 
         // Duplicate checking
@@ -93,27 +94,31 @@ public class FileRenamer {
         Index<String, FileInfo> md5Index = new Index<>();
         dateAndSizeCollisions.forEach(p -> md5Index.insert(p.getMD5Checksum(), p));
 
-        // TODO: More work needed on md5 checksum mis-matches as we are missing some edge case duplicates
-        print("FALSE:", md5Index.getUnique());
+        // Retract md5 collisions to leave "false positives"
+        for (FileInfo info : md5Index.getCollisions()) {
+            dateAndSizeIndex.retract(getDateAndSizeKey(info), info);
+        }
 
-        return md5Index.getGroupedCollisions();
+        return new List[]{md5Index.getGroupedCollisions(), dateAndSizeIndex.getGroupedCollisions()};
     }
 
-    public static void printDuplicates(String prefix, List<List<FileInfo>> duplicates) {
+    private static String getDateAndSizeKey(FileInfo info) {
+        return info.getDateTaken() + "_" + info.getFileLength();
+    }
+
+    public static void printDuplicates(String prefix, boolean target, List<List<FileInfo>> duplicates) {
         int groupId = 0;
         int counter = 0;
         for (List<FileInfo> group : duplicates) {
             String groupName = String.format("%04d", ++groupId);
             for (FileInfo d : group) {
-                LOG.info("{} {} {} {}", prefix, groupName, d.getMD5Checksum(), d.getSourceFile().getAbsolutePath());
+                LOG.info("{} {} {} {} {} {} \"{}\"", prefix, groupName,
+                        d.getMD5Checksum(), // duplicate hash
+                        d.getLocalDateAsText(), String.format("%010d", d.getFileLength()), // dateAndSize index
+                        (target) ? "T" : "S",
+                        (target) ? d.getTargetFile().getAbsolutePath() : d.getSourceFile().getAbsolutePath());
                 ++counter;
             }
-        }
-    }
-
-    public static void print(String prefix, List<FileInfo> files) {
-        for (FileInfo info : files) {
-            LOG.info("{} {} {} {}", prefix, info.getMD5Checksum(), info.getFileLength(), info.getSourceFile().getAbsolutePath());
         }
     }
 
@@ -124,9 +129,10 @@ public class FileRenamer {
             FileInfo info = files[position];
             info.setPosition(position + 1000);
 
-            // Determine the implied filename post the re-sort
+            // Determine the target filename post the re-sort
             String targetFileName = info.getRelativeName(prefix, true);
             File targetFile = new File(info.getSourceFile().getParent(), targetFileName);
+            info.setTargetFile(targetFile);
 
             if (action) {
                 // Set the creation and modification dates then rename the file

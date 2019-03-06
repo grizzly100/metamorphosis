@@ -19,6 +19,8 @@ public class FileInfo implements Comparable<FileInfo> {
      */
     private File sourceFile;
 
+    private File targetFile;
+
     /**
      * Original date/time text media was taken
      */
@@ -47,6 +49,14 @@ public class FileInfo implements Comparable<FileInfo> {
         this.sourceFile = sourceFile;
         this.dateTaken = FileMetadata.getDateTakenElseDefault(sourceFile);
         this.fileLength = this.sourceFile.length();
+    }
+
+    public File getTargetFile() {
+        return targetFile;
+    }
+
+    public void setTargetFile(File targetFile) {
+        this.targetFile = targetFile;
     }
 
     public String getSourceFileName() {
