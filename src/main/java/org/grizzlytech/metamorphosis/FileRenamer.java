@@ -21,7 +21,7 @@ public class FileRenamer {
 
     public static void main(String[] args) {
         String dir = args[0];
-        boolean action = true;
+        boolean action = false;
         String prefix = "IMG";
 
         // Scan files, sorting into increasing date taken order

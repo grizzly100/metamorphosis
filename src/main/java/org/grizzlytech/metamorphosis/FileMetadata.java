@@ -13,6 +13,7 @@ import com.drew.metadata.mov.QuickTimeDirectory;
 import com.drew.metadata.mov.metadata.QuickTimeMetadataDirectory;
 import com.drew.metadata.mp4.Mp4Directory;
 import org.grizzlytech.metamorphosis.imaging.heif.HEIFMetadataReader;
+import org.grizzlytech.metamorphosis.util.TimeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +76,7 @@ public class FileMetadata {
     public static Instant getDateTakenElseDefault(File file) {
         Instant dateTaken = getDateTaken(file);
         if (dateTaken == null) {
-            dateTaken = earliest(getFileDate(file, FILE_CREATION_TIME), getFileDate(file, FILE_LAST_MODIFIED_TIME));
+            dateTaken = TimeUtil.earliest(getFileDate(file, FILE_CREATION_TIME), getFileDate(file, FILE_LAST_MODIFIED_TIME));
             LOG.info("FALLING BACK TO EARLIEST FILE TIME [{}]", dateTaken);
         }
         return dateTaken;
@@ -141,7 +142,7 @@ public class FileMetadata {
             // Optionally there is sometimes an original date
             Instant originalDate = getDate(metadata, ExifSubIFDDirectory.class, ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL);
             // Select the earliest
-            return earliestCreationDate(creationDate, originalDate, file);
+            return TimeUtil.correctIfAlternativeMateriallyEarlier(creationDate, originalDate, file.getName());
         } catch (IOException | ImageProcessingException ex) {
             LOG.error("getJPGDateTaken: {}", ex);
         }
@@ -159,10 +160,16 @@ public class FileMetadata {
 
             // Creation time is always specified (this appears to be in the "wall time" when movie taken)
             Instant creationTime = getDate(metadata, QuickTimeDirectory.class, QuickTimeDirectory.TAG_CREATION_TIME);
-            // Optionally there is sometimes a creation date (Apple requires this to be UTC)
+
+            // Optionally there is sometimes a creation date
             Instant creationDate = getDate(metadata, QuickTimeMetadataDirectory.class, TAG_QUICKTIME_CREATIONDATE);
-            // Select the earliest
-            return earliestCreationDate(creationTime, creationDate, file);
+            // This is useful, but local time seems to be mis-recorded as UTC
+            if (creationDate != null) { // unfortunately we guess the timezone to be the system default
+                creationDate = TimeUtil.correctZoneOffset(creationDate, ZoneId.systemDefault());
+            }
+
+            // Select the earliest (creationTime is assumed, but creationDate is an alternative)
+            return TimeUtil.correctIfAlternativeMateriallyEarlier(creationTime, creationDate, file.getName());
         } catch (IOException | ImageProcessingException ex) {
             LOG.error("getQTDateTaken: {}", ex);
         }
@@ -197,56 +204,6 @@ public class FileMetadata {
             LOG.error("getHEIFDateTaken: {}", ex);
         }
         return null;
-    }
-
-    /**
-     * Compare the difference between two Instants
-     *
-     * @param time1  first time to compare
-     * @param time2  second time to compare
-     * @param period time period in seconds
-     * @param error  error margin in seconds
-     * @return 0 if equal to the period (+/- error); 1 if greater time period (+error); -1 if less time period (-error)
-     */
-    private static int compareTimeDeltaToPeriod(Instant time1, Instant time2, long period, long error) {
-        int cmp = 0; // assume time difference is equal to the time period (+/- the error margin)
-        long delta = Math.abs(time1.getEpochSecond() - time2.getEpochSecond());
-        if (delta > period + error) {
-            cmp = 1;
-        } else if (delta < period - error) {
-            cmp = -1;
-        }
-        return cmp;
-    }
-
-    private static Instant earliest(Instant time1, Instant time2) {
-        if (time2 == null) {
-            return time1;
-        }
-        return ((time1 != null) && time1.isBefore(time2)) ? time1 : time2;
-    }
-
-    /**
-     * @param mediaDate   date the media file was created (eg, ExifDirectoryBase.TAG_DATETIME)
-     * @param contentDate date the content in the media file was created (eg, ExifDirectoryBase.TAG_DATETIME_ORIGINAL)
-     * @return earliest date
-     */
-    private static Instant earliestCreationDate(Instant mediaDate, Instant contentDate, File file) {
-        Instant earliestDate = mediaDate;
-        // If both dates are provided but are materially different (>1hr) we need to handle the conflict
-        if (contentDate != null && !contentDate.equals(mediaDate)) {
-            // Times may be an hour apart (due to DST issues) or within a few seconds, so check for this
-            // withinAnHour = 0 (approx one hour), -1 (less than one hour), +1 (over one hour)
-            int withinAnHour = compareTimeDeltaToPeriod(mediaDate, contentDate, 3600, 100);
-            LOG.info("[{}]: mediaDate [{}] != contentDate [{}] withinAnHour [{}]",
-                    file.getName(), mediaDate, contentDate, withinAnHour);
-            // Only pick the earlier time if it makes a material difference
-            if (contentDate.isBefore(mediaDate) && withinAnHour == 1) {
-                earliestDate = contentDate;
-            }
-            LOG.info("[{}] Selected [{}]", file.getName(), earliestDate);
-        }
-        return earliestDate;
     }
 
     public static void dump(File file) {
