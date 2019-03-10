@@ -18,7 +18,7 @@ public class TimeUtil {
      * @param time2 second time to compare
      * @return true if the times are within an error margin
      */
-    public static boolean equalWithinError(Instant time1, Instant time2) {
+    public static boolean equalsWithinError(Instant time1, Instant time2) {
         final long ERROR = 100; // seconds
         return compareTimeDeltaToPeriod(time1, time2, 0, ERROR) == 0;
     }
@@ -84,7 +84,7 @@ public class TimeUtil {
     }
 
     /**
-     * Correct the timeAssumed with the timeAlternative only if it is materially (>1hr) earlier
+     * Correct the timeAssumed with the timeAlternative only if it is materially earlier
      * For example, if the content creation date is materially before the media date
      *
      * @param timeAssumed     time that will be assumed
@@ -95,14 +95,13 @@ public class TimeUtil {
                                                                 String context) {
         Instant earliestDate = timeAssumed;
         // If both dates are provided but are materially different (>1hr) we need to handle the conflict
-        if (timeAlternative != null && !equalWithinError(timeAssumed, timeAlternative)) {
+        if (timeAlternative != null && !equalsWithinError(timeAssumed, timeAlternative)) {
             // A "material" time difference is considered a day or more
             // Times may be just an hour apart (due to DST issues) or even within a few (nano) seconds
             int material = withinADay(timeAssumed, timeAlternative);
             // Only pick the earlier time if it makes a material difference
             if (timeAlternative.isBefore(timeAssumed) && material == 1) {
-                LOG.info("{} Assumed [{}] != Alternative [{}] material=[{}]", context, timeAssumed,
-                        timeAlternative, material);
+                LOG.info("{} Assumed [{}] >> Alternative [{}]", context, timeAssumed, timeAlternative);
                 earliestDate = timeAlternative;
             }
         }
