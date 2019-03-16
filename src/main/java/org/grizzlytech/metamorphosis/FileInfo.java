@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 
 /**
  * Metadata associated with a media file
@@ -83,12 +84,30 @@ public class FileInfo implements Comparable<FileInfo> {
         return FORMAT.format(this.dateTaken);
     }
 
+    public String getLocalTimeAsText() {
+        final DateTimeFormatter FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
+        return FORMAT.format(this.dateTaken);
+    }
+
     public int getPosition() {
         return position;
     }
 
     public void setPosition(int position) {
         this.position = position;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        FileInfo fileInfo = (FileInfo) o;
+        return Objects.equals(getSourceFile(), fileInfo.getSourceFile());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getSourceFile());
     }
 
     @Override

@@ -21,7 +21,7 @@ public class FileRenamer {
 
     public static void main(String[] args) {
         String dir = args[0];
-        boolean action = false;
+        boolean action = true;
         String prefix = "IMG";
 
         // Scan files, sorting into increasing date taken order
@@ -103,7 +103,7 @@ public class FileRenamer {
     }
 
     private static String getDateAndSizeKey(FileInfo info) {
-        return info.getDateTaken() + "_" + info.getFileLength();
+        return info.getLocalDateAsText() + "_" + info.getFileLength();
     }
 
     public static void printDuplicates(String prefix, boolean target, List<List<FileInfo>> duplicates) {
@@ -111,13 +111,17 @@ public class FileRenamer {
         int counter = 0;
         for (List<FileInfo> group : duplicates) {
             String groupName = String.format("%04d", ++groupId);
+            String action = "REM";
             for (FileInfo d : group) {
-                LOG.info("{} {} {} {} {} {} \"{}\"", prefix, groupName,
+                LOG.info("{} {} {} {} {} {} {} {} \"{}\"", prefix, groupName,
                         d.getMD5Checksum(), // duplicate hash
-                        d.getLocalDateAsText(), String.format("%010d", d.getFileLength()), // dateAndSize index
+                        d.getLocalDateAsText(), d.getLocalTimeAsText(),
+                        String.format("%010d", d.getFileLength()), // dateAndSize index
                         (target) ? "T" : "S",
+                        action,
                         (target) ? d.getTargetFile().getAbsolutePath() : d.getSourceFile().getAbsolutePath());
                 ++counter;
+                action = "DEL";
             }
         }
     }

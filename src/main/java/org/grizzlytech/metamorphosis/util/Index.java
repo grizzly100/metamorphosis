@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -40,6 +41,9 @@ public class Index<K, V> extends HashMap<K, List<V>> {
         // Add the new value (assuming it does not already exist)
         if (!entries.contains(v)) {
             entries.add(v);
+            if (LOG.isDebugEnabled() && entries.size() > 1) {
+                LOG.debug("Key {} has {} entries", k, entries.size());
+            }
         }
     }
 
