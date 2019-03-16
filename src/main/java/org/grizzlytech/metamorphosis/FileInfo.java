@@ -112,11 +112,10 @@ public class FileInfo implements Comparable<FileInfo> {
 
     @Override
     public String toString() {
-        String sb = getClass().getName() + "{" + "sourceFile=" + sourceFile +
+        return getClass().getName() + "{" + "sourceFile=" + sourceFile +
                 ", dateTaken=" + getDateTaken() + '\'' +
                 ", position=" + position +
                 '}';
-        return sb;
     }
 
     @Override
@@ -143,7 +142,7 @@ public class FileInfo implements Comparable<FileInfo> {
      * @param includeDate to include YYYYMMDD date (if successfully parsed)
      * @return the relative file name
      */
-    public String getRelativeName(String prefix, boolean includeDate) {
+    public String getRelativeName(String prefix, boolean includeDate, int index) {
         final String DELIMITER = "_";
         StringBuilder builder = new StringBuilder();
         if (prefix != null) {
@@ -155,6 +154,10 @@ public class FileInfo implements Comparable<FileInfo> {
             builder.append(DELIMITER);
         }
         builder.append(position);
+        if (index > 0) {
+            builder.append(DELIMITER);
+            builder.append(index);
+        }
         builder.append(FileMetadata.getExtension(this.sourceFile));
         return builder.toString();
     }

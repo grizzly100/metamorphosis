@@ -1,6 +1,7 @@
 package org.grizzlytech.metamorphosis;
 
 import org.grizzlytech.metamorphosis.util.Index;
+import org.grizzlytech.metamorphosis.util.TimeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -30,12 +32,12 @@ public class FileRenamer {
         // Identify duplicates ( [0]=actual and [1]=false positive )
         List<List<FileInfo>>[] duplicates = findDuplicates(files);
 
-        // If there are duplicates, print them, otherwise rename the files
+        // If there are duplicates, print them, otherwise renameFile the files
         if (duplicates[0].size() > 0) {
             printDuplicates("DUP:", false, duplicates[0]);
             printDuplicates("FSE:", false, duplicates[1]);
         } else {
-            rename(files, action, prefix);
+            renameFiles(files, action, prefix);
             printDuplicates("FSE:", action, duplicates[1]);
         }
     }
@@ -48,7 +50,7 @@ public class FileRenamer {
      * @param sort whether to sort the results by date taken before returning
      * @return array of FileInfo objects
      */
-    public static FileInfo[] scan(String dir, boolean sort) {
+    private static FileInfo[] scan(String dir, boolean sort) {
         LOG.info("Scanning [{}]", dir);
         FileInfo[] results = null;
         try (Stream<Path> paths = Files.walk(Paths.get(dir))) {
@@ -76,7 +78,7 @@ public class FileRenamer {
      *
      * @param files media files to examine
      */
-    public static List<List<FileInfo>>[] findDuplicates(FileInfo[] files) {
+    private static List<List<FileInfo>>[] findDuplicates(FileInfo[] files) {
         // Index of all media with the same date taken and file size
         Index<String, FileInfo> dateAndSizeIndex = new Index<>();
 
@@ -106,27 +108,30 @@ public class FileRenamer {
         return info.getLocalDateAsText() + "_" + info.getFileLength();
     }
 
-    public static void printDuplicates(String prefix, boolean target, List<List<FileInfo>> duplicates) {
+    private static void printDuplicates(String prefix, boolean target, List<List<FileInfo>> duplicates) {
         int groupId = 0;
         int counter = 0;
         for (List<FileInfo> group : duplicates) {
             String groupName = String.format("%04d", ++groupId);
-            String action = "REM";
+            String command;
+            Instant priorDate = null;
             for (FileInfo d : group) {
-                LOG.info("{} {} {} {} {} {} {} {} \"{}\"", prefix, groupName,
-                        d.getMD5Checksum(), // duplicate hash
-                        d.getLocalDateAsText(), d.getLocalTimeAsText(),
+                // Recommend deletion only if subsequent timestamps are the same (to the nearest second)
+                command = (priorDate == null || !TimeUtil.withinASecond(priorDate, d.getDateTaken())) ? "REM" : "DEL";
+                LOG.info("{} {} {} {} {} {} {} \"{}\"", prefix, groupName,
+                        d.getMD5Checksum(), // content hash
+                        d.getLocalDateAsText() + " " + d.getLocalTimeAsText(), // date and time to nearest second
                         String.format("%010d", d.getFileLength()), // dateAndSize index
-                        (target) ? "T" : "S",
-                        action,
+                        (target) ? "T" : "S", // target (if renamed) or source filename
+                        command, // retain (REM) or delete (DEL)
                         (target) ? d.getTargetFile().getAbsolutePath() : d.getSourceFile().getAbsolutePath());
                 ++counter;
-                action = "DEL";
+                priorDate = d.getDateTaken();
             }
         }
     }
 
-    public static void rename(FileInfo[] files, boolean action, String prefix) {
+    private static void renameFiles(FileInfo[] files, boolean action, String prefix) {
         // Set the positional value, starting at 1000
         LOG.info("Renaming [fileCount={}]", files.length);
         for (int position = 0; position < files.length; position++) {
@@ -134,30 +139,53 @@ public class FileRenamer {
             info.setPosition(position + 1000);
 
             // Determine the target filename post the re-sort
-            String targetFileName = info.getRelativeName(prefix, true);
-            File targetFile = new File(info.getSourceFile().getParent(), targetFileName);
-            info.setTargetFile(targetFile);
+            boolean renamed;
+            boolean conflict;
+            int index = 0;
+            do {
+                String targetFileName = info.getRelativeName(prefix, true, index++);
+                info.setTargetFile(new File(info.getSourceFile().getParent(), targetFileName));
+                renamed = !info.getSourceFile().equals(info.getTargetFile());
+                conflict = renamed && info.getTargetFile().exists();
+            }
+            while (conflict);
 
             if (action) {
-                // Set the creation and modification dates then rename the file
+                // Set the creation and modification dates then renameFile the file
                 updateDates(info);
-                info.getSourceFile().renameTo(targetFile);
+                if (renamed) {
+                    renameFile(info);
+                }
                 // Checkpoint log
                 if (position % 1000 == 0) {
-                    LOG.info(" Checkpoint [{}]", targetFile.getName());
+                    LOG.info(" Checkpoint [{}]", info.getTargetFile());
                 }
 
             } else {
                 // Emit proposals
-                LOG.info("move \"{}\" \"{}\"", info.getSourceFileName(), targetFile.getName());
+                LOG.info("move \"{}\" \"{}\"", info.getSourceFileName(), info.getTargetFile());
             }
         }
         LOG.info("Done");
     }
 
-    protected static void updateDates(FileInfo p) {
+    private static void updateDates(FileInfo p) {
         if (p.getDateTaken() != null) {
             FileMetadata.setFileDate(p.getSourceFile(), p.getDateTaken());
         }
+    }
+
+    private static boolean renameFile(FileInfo info) {
+        boolean ret = false;
+        if (info.getTargetFile().exists()) {
+            LOG.error("CONFLICT: Cannot renameFile [{}] to [{}] as target already exists",
+                    info.getSourceFile(), info.getTargetFile());
+        } else {
+            ret = info.getSourceFile().renameTo(info.getTargetFile());
+            if (!ret) {
+                LOG.error("FAILED: Rename failed for [{}] to [{}]", info.getSourceFile(), info.getTargetFile());
+            }
+        }
+        return ret;
     }
 }

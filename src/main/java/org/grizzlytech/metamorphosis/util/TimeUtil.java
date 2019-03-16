@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.*;
+import java.time.temporal.ChronoUnit;
 
 /**
  * Utility functions for comparing Instants
@@ -11,42 +12,28 @@ import java.time.*;
 public class TimeUtil {
     private static final Logger LOG = LoggerFactory.getLogger(TimeUtil.class);
 
-    /**
-     * Compare two times for equality within an error margin
-     *
-     * @param time1 first time to compare
-     * @param time2 second time to compare
-     * @return true if the times are within an error margin
-     */
-    public static boolean equalsWithinError(Instant time1, Instant time2) {
-        final long ERROR = 100; // seconds
-        return compareTimeDeltaToPeriod(time1, time2, 0, ERROR) == 0;
+    public static boolean withinASecond(Instant time1, Instant time2) {
+        final long PERIOD = 1000; // milliseconds per second
+        final long ERROR = error(PERIOD); // milliseconds
+        return compareDurationToPeriodOfMilliseconds(time1, time2, PERIOD, ERROR) <= 0;
     }
 
-    /**
-     * Compare two times to determine if the period between them is within an hour
-     *
-     * @param time1 first time to compare
-     * @param time2 second time to compare
-     * @return 0 if equal to an hour (+/- error); 1 if greater time period (+error); -1 if less time period (-error)
-     */
-    public static int withinAnHour(Instant time1, Instant time2) {
+    public static boolean withinAMinute(Instant time1, Instant time2) {
+        final long PERIOD = 60; // seconds
+        final long ERROR = error(PERIOD); // seconds
+        return compareDurationToPeriodOfSeconds(time1, time2, PERIOD, ERROR) <= 0;
+    }
+
+    public static boolean withinAnHour(Instant time1, Instant time2) {
         final long PERIOD = 60 * 60; // seconds
-        final long ERROR = 100; // seconds
-        return compareTimeDeltaToPeriod(time1, time2, PERIOD, ERROR);
+        final long ERROR = error(PERIOD); // seconds
+        return compareDurationToPeriodOfSeconds(time1, time2, PERIOD, ERROR) <= 0;
     }
 
-    /**
-     * Compare two times to determine if the period between them is within an hour
-     *
-     * @param time1 first time to compare
-     * @param time2 second time to compare
-     * @return 0 if equal to a day (+/- error); 1 if greater time period (+error); -1 if less time period (-error)
-     */
-    public static int withinADay(Instant time1, Instant time2) {
+    public static boolean withinADay(Instant time1, Instant time2) {
         final long PERIOD = 24 * 60 * 60; // seconds
-        final long ERROR = 100; // seconds
-        return compareTimeDeltaToPeriod(time1, time2, PERIOD, ERROR);
+        final long ERROR = error(PERIOD); // seconds
+        return compareDurationToPeriodOfSeconds(time1, time2, PERIOD, ERROR) <= 0;
     }
 
     /**
@@ -64,20 +51,38 @@ public class TimeUtil {
     }
 
     /**
-     * Compare the difference between two Instants
+     * Compare the difference between two Instants. SECONDS
      *
-     * @param time1  first time to compare
-     * @param time2  second time to compare
-     * @param period time period in seconds
-     * @param error  error margin in seconds
+     * @param time1   first time to compare
+     * @param time2   second time to compare
+     * @param seconds time period in seconds
+     * @param error   error margin in seconds
      * @return 0 if equal to the period (+/- error); 1 if greater time period (+error); -1 if less time period (-error)
      */
-    public static int compareTimeDeltaToPeriod(Instant time1, Instant time2, long period, long error) {
+    public static int compareDurationToPeriodOfSeconds(Instant time1, Instant time2, long seconds, long error) {
         int cmp = 0; // assume time difference is equal to the time period (+/- the error margin)
         long delta = Math.abs(time1.getEpochSecond() - time2.getEpochSecond());
-        if (delta > period + error) {
+        if (delta > seconds + error) {
             cmp = 1;
-        } else if (delta < period - error) {
+        } else if (delta < seconds - error) {
+            cmp = -1;
+        }
+        return cmp;
+    }
+
+    public static int compareDurationToPeriodOfMilliseconds(Instant time1, Instant time2, long millis, long error) {
+        final Duration MILLIS = ChronoUnit.MILLIS.getDuration();
+        int cmp = 0; // assume time difference is equal to the time period (+/- the error margin)
+        long delta = Duration.between(time1, time2).dividedBy(MILLIS);
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("{} & {} & {} & {}", time1, time2, millis, error);
+            LOG.debug("{} & {} & {}", Duration.between(time1, time2).getNano(), delta, MILLIS.getNano());
+        }
+
+        if (delta > millis + error) {
+            cmp = 1;
+        } else if (delta < millis - error) {
             cmp = -1;
         }
         return cmp;
@@ -95,12 +100,12 @@ public class TimeUtil {
                                                                 String context) {
         Instant earliestDate = timeAssumed;
         // If both dates are provided but are materially different (>1hr) we need to handle the conflict
-        if (timeAlternative != null && !equalsWithinError(timeAssumed, timeAlternative)) {
+        if (timeAlternative != null && !withinAMinute(timeAssumed, timeAlternative)) {
             // A "material" time difference is considered a day or more
             // Times may be just an hour apart (due to DST issues) or even within a few (nano) seconds
-            int material = withinADay(timeAssumed, timeAlternative);
+            boolean material = !withinADay(timeAssumed, timeAlternative);
             // Only pick the earlier time if it makes a material difference
-            if (timeAlternative.isBefore(timeAssumed) && material == 1) {
+            if (timeAlternative.isBefore(timeAssumed) && material) {
                 LOG.info("{} Assumed [{}] >> Alternative [{}]", context, timeAssumed, timeAlternative);
                 earliestDate = timeAlternative;
             }
@@ -125,5 +130,10 @@ public class TimeUtil {
         ZonedDateTime zdt = ZonedDateTime.of(ldt, zone);
         // Converting back into a UTC Instant will correct the hour to 4pm
         return zdt.toInstant();
+    }
+
+    private static long error(long period) {
+        final double margin = 0.1;
+        return (long) (period * margin);
     }
 }
