@@ -11,7 +11,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -134,27 +136,26 @@ public class FileRenamer {
     private static void renameFiles(FileInfo[] files, boolean action, String prefix) {
         // Set the positional value, starting at 1000
         LOG.info("Renaming [fileCount={}]", files.length);
+        List<FileInfo> conflicts = new LinkedList<>();
         for (int position = 0; position < files.length; position++) {
             FileInfo info = files[position];
             info.setPosition(position + 1000);
 
             // Determine the target filename post the re-sort
-            boolean renamed;
-            boolean conflict;
-            int index = 0;
+            int index = -1;
             do {
-                String targetFileName = info.getRelativeName(prefix, true, index++);
-                info.setTargetFile(new File(info.getSourceFile().getParent(), targetFileName));
-                renamed = !info.getSourceFile().equals(info.getTargetFile());
-                conflict = renamed && info.getTargetFile().exists();
+                info.setTargetFile(info.getRelativeFile(prefix, ++index));
             }
-            while (conflict);
+            while (info.renameConflicts());
 
             if (action) {
                 // Set the creation and modification dates then renameFile the file
                 updateDates(info);
-                if (renamed) {
-                    renameFile(info);
+                if (info.renameRequired()) {
+                    boolean renamed = renameFile(info.getSourceFile(), info.getTargetFile());
+                    if (renamed && index > 0) {
+                        conflicts.add(info);
+                    }
                 }
                 // Checkpoint log
                 if (position % 1000 == 0) {
@@ -166,6 +167,14 @@ public class FileRenamer {
                 LOG.info("move \"{}\" \"{}\"", info.getSourceFileName(), info.getTargetFile());
             }
         }
+
+        // Assume conflicts (that forced indexing) now removed
+        for (FileInfo info : conflicts) {
+            File newTargetFile = info.getRelativeFile(prefix, 0);
+            if (renameFile(info.getTargetFile(), newTargetFile)) {
+                info.setTargetFile(newTargetFile);
+            }
+        }
         LOG.info("Done");
     }
 
@@ -175,15 +184,17 @@ public class FileRenamer {
         }
     }
 
-    private static boolean renameFile(FileInfo info) {
+    private static boolean renameFile(File sourceFile, File targetFile) {
         boolean ret = false;
-        if (info.getTargetFile().exists()) {
+        if (targetFile.exists()) {
             LOG.error("CONFLICT: Cannot renameFile [{}] to [{}] as target already exists",
-                    info.getSourceFile(), info.getTargetFile());
+                    sourceFile, targetFile);
         } else {
-            ret = info.getSourceFile().renameTo(info.getTargetFile());
-            if (!ret) {
-                LOG.error("FAILED: Rename failed for [{}] to [{}]", info.getSourceFile(), info.getTargetFile());
+            ret = sourceFile.renameTo(targetFile);
+            if (ret) {
+                LOG.debug("moved \"{}\" \"{}\"", sourceFile, targetFile);
+            } else {
+                LOG.error("FAILED: Rename failed for [{}] to [{}]", sourceFile, targetFile);
             }
         }
         return ret;

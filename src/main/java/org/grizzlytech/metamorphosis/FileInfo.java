@@ -48,7 +48,6 @@ public class FileInfo implements Comparable<FileInfo> {
 
     public void setSourceFile(File sourceFile) {
         this.sourceFile = sourceFile;
-        this.dateTaken = FileMetadata.getDateTakenElseDefault(sourceFile);
         this.fileLength = this.sourceFile.length();
     }
 
@@ -65,6 +64,9 @@ public class FileInfo implements Comparable<FileInfo> {
     }
 
     public Instant getDateTaken() {
+        if (this.dateTaken == null && (getFileLength() > 0)) {
+            this.dateTaken = FileMetadata.getDateTakenElseDefault(sourceFile);
+        }
         return this.dateTaken;
     }
 
@@ -81,12 +83,12 @@ public class FileInfo implements Comparable<FileInfo> {
 
     public String getLocalDateAsText() {
         final DateTimeFormatter FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneId.systemDefault());
-        return FORMAT.format(this.dateTaken);
+        return FORMAT.format(getDateTaken());
     }
 
     public String getLocalTimeAsText() {
         final DateTimeFormatter FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
-        return FORMAT.format(this.dateTaken);
+        return FORMAT.format(getDateTaken());
     }
 
     public int getPosition() {
@@ -95,6 +97,14 @@ public class FileInfo implements Comparable<FileInfo> {
 
     public void setPosition(int position) {
         this.position = position;
+    }
+
+    public boolean renameRequired() {
+        return !getSourceFile().equals(getTargetFile());
+    }
+
+    public boolean renameConflicts() {
+        return renameRequired() && getTargetFile() != null && getTargetFile().exists();
     }
 
     @Override
@@ -138,18 +148,17 @@ public class FileInfo implements Comparable<FileInfo> {
     /**
      * Return the relative positional name of the file
      *
-     * @param prefix      for example, "IMG"
-     * @param includeDate to include YYYYMMDD date (if successfully parsed)
+     * @param prefix for example, "IMG"
      * @return the relative file name
      */
-    public String getRelativeName(String prefix, boolean includeDate, int index) {
+    public String getRelativeName(String prefix, int index) {
         final String DELIMITER = "_";
         StringBuilder builder = new StringBuilder();
         if (prefix != null) {
             builder.append(prefix);
             builder.append(DELIMITER);
         }
-        if (includeDate && this.dateTaken != null) {
+        if (this.dateTaken != null) {
             builder.append(getLocalDateAsText());
             builder.append(DELIMITER);
         }
@@ -160,5 +169,9 @@ public class FileInfo implements Comparable<FileInfo> {
         }
         builder.append(FileMetadata.getExtension(this.sourceFile));
         return builder.toString();
+    }
+
+    public File getRelativeFile(String prefix, int index) {
+        return new File(getSourceFile().getParent(), getRelativeName(prefix, index));
     }
 }
