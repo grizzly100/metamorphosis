@@ -100,7 +100,7 @@ public class TimeUtil {
                                                                 String context) {
         Instant earliestDate = timeAssumed;
         // If both dates are provided but are materially different (>1hr) we need to handle the conflict
-        if (timeAlternative != null && !withinAMinute(timeAssumed, timeAlternative)) {
+        if (timeAlternative != null && !withinAnHour(timeAssumed, timeAlternative)) {
             // A "material" time difference is considered a day or more
             // Times may be just an hour apart (due to DST issues) or even within a few (nano) seconds
             boolean material = !withinADay(timeAssumed, timeAlternative);
