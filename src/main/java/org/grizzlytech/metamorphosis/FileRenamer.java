@@ -1,5 +1,6 @@
 package org.grizzlytech.metamorphosis;
 
+import com.drew.metadata.mov.metadata.QuickTimeMetadataDirectory;
 import org.grizzlytech.metamorphosis.util.Index;
 import org.grizzlytech.metamorphosis.util.TimeUtil;
 import org.slf4j.Logger;
@@ -7,10 +8,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +27,7 @@ public class FileRenamer {
     private static final Logger LOG = LoggerFactory.getLogger(FileRenamer.class);
 
     public static void main(String[] args) {
+
         String dir = args[0];
         boolean action = true;
         String prefix = "IMG";

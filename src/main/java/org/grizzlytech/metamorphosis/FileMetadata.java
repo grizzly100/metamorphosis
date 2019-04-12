@@ -13,6 +13,7 @@ import com.drew.metadata.mov.QuickTimeDirectory;
 import com.drew.metadata.mov.metadata.QuickTimeMetadataDirectory;
 import com.drew.metadata.mp4.Mp4Directory;
 import org.grizzlytech.metamorphosis.imaging.heif.HEIFMetadataReader;
+import org.grizzlytech.metamorphosis.metadata.MetadataDirectoryFix;
 import org.grizzlytech.metamorphosis.util.TimeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,9 @@ public class FileMetadata {
         return path.substring(path.lastIndexOf("."));
     }
 
+    static {
+        MetadataDirectoryFix.applyFixes();
+    }
     // File Metadata
 
     public static Instant getFileDate(File file, String attributeName) {
@@ -71,7 +75,6 @@ public class FileMetadata {
             LOG.error("setFileDate file:[{}] error:[{}]", file.getAbsolutePath(), ex);
         }
     }
-
 
     public static Instant getDateTakenElseDefault(File file) {
         Instant dateTaken = getDateTaken(file);
