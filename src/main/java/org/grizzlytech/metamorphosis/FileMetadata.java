@@ -49,6 +49,11 @@ public class FileMetadata {
         return path.substring(path.lastIndexOf("."));
     }
 
+    public static String setExtension(File file, String extension) {
+        String path = file.getAbsolutePath();
+        return path.substring(0, path.lastIndexOf(".")) + extension;
+    }
+
     static {
         MetadataDirectoryFix.applyFixes();
     }
@@ -117,7 +122,12 @@ public class FileMetadata {
             }
 
             if (dateTaken == null) {
-                LOG.error("(non-exception) problem parsing metadata in {}", file.getAbsolutePath());
+                // Known problem where iOS puts pictures in movie containers in error
+                if (ext.equals(".MOV")) {
+                    LOG.error("MOVE {} {}", file.getAbsolutePath(), setExtension(file, "_X.JPG"));
+                } else {
+                    LOG.error("(non-exception) problem parsing metadata in {}", file.getAbsolutePath());
+                }
             }
         } catch (Exception ex) {
             LOG.error("Exception parsing metadata in {}", file.getAbsolutePath(), ex);
