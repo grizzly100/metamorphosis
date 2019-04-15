@@ -167,7 +167,7 @@ public class FileInfo implements Comparable<FileInfo> {
             builder.append(DELIMITER);
             builder.append(index);
         }
-        builder.append(FileMetadata.getExtension(this.sourceFile));
+        builder.append(FileMetadata.getExtension(this.sourceFile).toUpperCase());
         return builder.toString();
     }
 

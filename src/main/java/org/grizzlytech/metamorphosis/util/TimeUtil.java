@@ -99,8 +99,13 @@ public class TimeUtil {
     public static Instant correctIfAlternativeMateriallyEarlier(Instant timeAssumed, Instant timeAlternative,
                                                                 String context) {
         Instant earliestDate = timeAssumed;
+
+        if (timeAssumed == null) {
+            earliestDate = timeAlternative;
+            LOG.warn("{} timeAssumed was null, so using timeAlternative = [{}]", context, timeAlternative);
+        }
         // If both dates are provided but are materially different (>1hr) we need to handle the conflict
-        if (timeAlternative != null && !withinAnHour(timeAssumed, timeAlternative)) {
+        else if (timeAlternative != null && !withinAnHour(timeAssumed, timeAlternative)) {
             // A "material" time difference is considered a day or more
             // Times may be just an hour apart (due to DST issues) or even within a few (nano) seconds
             boolean material = !withinADay(timeAssumed, timeAlternative);

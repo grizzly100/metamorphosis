@@ -44,6 +44,16 @@ public class FileMetadata {
     public static final Predicate<File> IS_SUPPORTED = f ->
             SUPPORTED_FORMATS.contains(FileMetadata.getExtension(f).toUpperCase());
 
+    private static long timeOffset = 0;
+
+    public static long getTimeOffset() {
+        return timeOffset;
+    }
+
+    public static void setTimeOffset(long timeOffset) {
+        FileMetadata.timeOffset = timeOffset;
+    }
+
     public static String getExtension(File file) {
         String path = file.getAbsolutePath();
         return path.substring(path.lastIndexOf("."));
@@ -128,6 +138,8 @@ public class FileMetadata {
                 } else {
                     LOG.error("(non-exception) problem parsing metadata in {}", file.getAbsolutePath());
                 }
+            } else if (timeOffset != 0) { // apply any camera vs actual time offset
+                dateTaken = dateTaken.plusSeconds(timeOffset);
             }
         } catch (Exception ex) {
             LOG.error("Exception parsing metadata in {}", file.getAbsolutePath(), ex);
@@ -154,8 +166,9 @@ public class FileMetadata {
             Instant creationDate = getDate(metadata, ExifIFD0Directory.class, ExifDirectoryBase.TAG_DATETIME);
             // Optionally there is sometimes an original date
             Instant originalDate = getDate(metadata, ExifSubIFDDirectory.class, ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL);
-            // Select the earliest
-            return TimeUtil.correctIfAlternativeMateriallyEarlier(creationDate, originalDate, file.getName());
+            // Select the earliest (if there is a choice)
+            return (originalDate == null) ? creationDate : TimeUtil.correctIfAlternativeMateriallyEarlier(
+                    creationDate, originalDate, file.getName());
         } catch (IOException | ImageProcessingException ex) {
             LOG.error("getJPGDateTaken: {}", ex);
         }
@@ -163,7 +176,7 @@ public class FileMetadata {
     }
 
     private static Instant getQTDateTaken(File file) {
-        /**
+        /*
          * For some reason Drew has not added a public TAG for this attribute in QuickTimeMetadataDirectory
          * See _tagIntegerMap.put("com.apple.quicktime.creationdate", 0x0506);
          */
@@ -232,7 +245,7 @@ public class FileMetadata {
     /**
      * Dump all metadata attributes
      *
-     * @param metadata
+     * @param metadata metadata to print
      */
     public static void dump(Metadata metadata) {
         for (Directory directory : metadata.getDirectories()) {

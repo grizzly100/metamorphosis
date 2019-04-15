@@ -27,10 +27,12 @@ public class FileRenamer {
     private static final Logger LOG = LoggerFactory.getLogger(FileRenamer.class);
 
     public static void main(String[] args) {
-
         String dir = args[0];
         boolean action = true;
         String prefix = "IMG";
+
+        // Handle case where photo dates are wrong due to incorrect camera date setting
+        // setTimeOffset(Instant.parse("2004-01-01T00:00:00Z"), Instant.parse("2010-12-25T15:00:00Z"));
 
         // Scan files, sorting into increasing date taken order
         FileInfo[] files = scan(dir, true);
@@ -202,5 +204,19 @@ public class FileRenamer {
             }
         }
         return ret;
+    }
+
+    /**
+     * Call this method if the camera time was incorrect.
+     *
+     * @param photoCameraTime time a sample photo was taken as recorded in the metadata
+     * @param photoActualTime actual time you believe the sample photo was taken
+     */
+    private static void setTimeOffset(Instant photoCameraTime, Instant photoActualTime) {
+        if (photoCameraTime != null && photoActualTime != null) {
+            long timeOffset = photoActualTime.getEpochSecond() - photoCameraTime.getEpochSecond();
+            LOG.info("Setting time offset of {} seconds", timeOffset);
+            FileMetadata.setTimeOffset(timeOffset);
+        }
     }
 }
