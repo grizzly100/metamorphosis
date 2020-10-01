@@ -26,6 +26,8 @@ public class FileRenamer {
 
     private static final Logger LOG = LoggerFactory.getLogger(FileRenamer.class);
 
+    private static final int START_AT = 1000;
+
     public static void main(String[] args) {
         String dir = args[0];
         boolean action = true;
@@ -145,7 +147,7 @@ public class FileRenamer {
         List<FileInfo> conflicts = new LinkedList<>();
         for (int position = 0; position < files.length; position++) {
             FileInfo info = files[position];
-            info.setPosition(position + 1000);
+            info.setPosition(position + START_AT);
 
             // Determine the target filename post the re-sort
             int index = -1;
