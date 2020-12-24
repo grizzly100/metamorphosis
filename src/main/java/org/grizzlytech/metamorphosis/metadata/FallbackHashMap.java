@@ -18,17 +18,31 @@ public class FallbackHashMap<K, V> extends HashMap<K, V> {
 
     private BiFunction<HashMap<K, V>, K, V> fallbackGetter;
 
+    private boolean logFallbacks = true;
+
     public FallbackHashMap(BiFunction<HashMap<K, V>, K, V> fallbackGetter) {
         this.fallbackGetter = fallbackGetter;
+    }
+
+    public FallbackHashMap(V fallbackValue) {
+        this((m, k) -> fallbackValue);
     }
 
     @Override
     public V get(Object key) {
         V result = super.get(key);
         if (result == null) {
+            // Fallback
             result = fallbackGetter.apply(this, (K) key);
-            LOG.info("Fallback for [{}] was [{}]", key, result);
+            if (logFallbacks) {
+                LOG.info("Map fallback [{}] == [{}]", key, result);
+            }
         }
+
         return result;
+    }
+
+    public void setLogFallbacks(boolean logFallbacks) {
+        this.logFallbacks = logFallbacks;
     }
 }

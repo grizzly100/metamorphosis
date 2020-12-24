@@ -1,6 +1,7 @@
 package org.grizzlytech.metamorphosis;
 
 import com.drew.metadata.mov.metadata.QuickTimeMetadataDirectory;
+import org.grizzlytech.metamorphosis.metadata.MetadataDirectoryFix;
 import org.grizzlytech.metamorphosis.util.Index;
 import org.grizzlytech.metamorphosis.util.TimeUtil;
 import org.slf4j.Logger;
@@ -35,6 +36,7 @@ public class FileRenamer {
 
         // Handle case where photo dates are wrong due to incorrect camera date setting
         // setTimeOffset(Instant.parse("2004-01-01T00:00:00Z"), Instant.parse("2010-12-25T15:00:00Z"));
+        //MetadataDirectoryFix.applyFixes();
 
         // Scan files, sorting into increasing date taken order
         FileInfo[] files = scan(dir, true);
@@ -128,6 +130,7 @@ public class FileRenamer {
             for (FileInfo d : group) {
                 // Recommend deletion only if subsequent timestamps are the same (to the nearest second)
                 command = (priorDate == null || !TimeUtil.withinASecond(priorDate, d.getDateTaken())) ? "REM" : "DEL";
+                // command = (priorDate == null) ? "REM" : "DEL";
                 LOG.info("{} {} {} {} {} {} {} \"{}\"", prefix, groupName,
                         d.getMD5Checksum(), // content hash
                         d.getLocalDateAsText() + " " + d.getLocalTimeAsText(), // date and time to nearest second
